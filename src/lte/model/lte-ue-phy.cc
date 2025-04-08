@@ -660,10 +660,14 @@ LteUePhy::DoSendSlMacPdu(Ptr<Packet> p, LteUePhySapProvider::TransmitSlPhySduPar
     NS_LOG_FUNCTION(this);
 
     SetMacPdu(p);
-
-    NS_ASSERT_MSG(m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).empty(),
-                  "Error: Can only send one sidelink message per TTI");
+    // NS_ASSERT_MSG(m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).empty(),
+    //               "Error: Can only send one sidelink message per TTI");
+    // if(m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).empty() && !q.empty()){
+    //     m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).push_back(q.front());
+    //     q.pop();
+    // }
     m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).push_back(params);
+    
 }
 
 std::list<LteUePhySapProvider::TransmitSlPhySduParameters>

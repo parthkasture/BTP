@@ -156,6 +156,7 @@ LteRlcUm::DoTransmitPdcpPdu(Ptr<Packet> p)
         NS_LOG_LOGIC("txBufferSize    = " << m_txBufferSize);
         NS_LOG_LOGIC("packet size     = " << p->GetSize());
         m_txDropTrace(p);
+        // std::cout<<"discarded"<<m_rnti<<std::endl;
     }
 
     /** Report Buffer Status */

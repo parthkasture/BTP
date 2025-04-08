@@ -29,6 +29,7 @@
 #include "lte-radio-bearer-tag.h"
 #include "lte-sl-header.h"
 #include "lte-sl-tag.h"
+#include "lte-spectrum-phy.h"
 
 #include <ns3/boolean.h>
 #include <ns3/enum.h>
@@ -41,6 +42,7 @@
 #include <ns3/string.h>
 
 #include <bitset>
+#include <queue>
 
 namespace ns3
 {
@@ -416,6 +418,81 @@ LteUeMac::GetTypeId()
     return tid;
 }
 
+Backoff::Backoff()
+{
+    m_slotTime = Seconds(1);
+    m_minSlots = 1;
+    m_maxSlots = 1000;
+    m_ceiling = 10;
+    m_maxRetries = 1000;
+    m_numBackoffRetries = 0;
+    m_rng = CreateObject<UniformRandomVariable>();
+
+    ResetBackoffTime();
+}
+
+Backoff::Backoff(Time slotTime,
+                 uint32_t minSlots,
+                 uint32_t maxSlots,
+                 uint32_t ceiling,
+                 uint32_t maxRetries)
+{
+    m_slotTime = slotTime;
+    m_minSlots = minSlots;
+    m_maxSlots = maxSlots;
+    m_ceiling = ceiling;
+    m_maxRetries = maxRetries;
+    m_numBackoffRetries = 0;
+    m_rng = CreateObject<UniformRandomVariable>();
+}
+
+Time
+Backoff::GetBackoffTime()
+{
+    uint32_t ceiling;
+
+    if ((m_ceiling > 0) && (m_numBackoffRetries > m_ceiling))
+    {
+        ceiling = m_ceiling;
+    }
+    else
+    {
+        ceiling = m_numBackoffRetries;
+    }
+
+    uint32_t minSlot = m_minSlots;
+    uint32_t maxSlot = (uint32_t)pow(2, ceiling) - 1;
+    // std::cout<<maxSlot<<" "<<ceiling<<std::endl;
+    if (maxSlot > m_maxSlots)
+    {
+        maxSlot = m_maxSlots;
+    }
+
+    auto backoffSlots = (uint32_t)m_rng->GetValue(minSlot, maxSlot);
+
+    Time backoff = Time(backoffSlots * m_slotTime);
+    return backoff;
+}
+
+void
+Backoff::ResetBackoffTime()
+{
+    m_numBackoffRetries = 0;
+}
+
+bool
+Backoff::MaxRetriesReached() const
+{
+    return (m_numBackoffRetries >= m_maxRetries);
+}
+
+void
+Backoff::IncrNumRetries()
+{
+    m_numBackoffRetries++;
+}
+
+
 LteUeMac::LteUeMac()
     : m_bsrPeriodicity(MilliSeconds(1)),
       // ideal behavior
@@ -438,7 +515,7 @@ LteUeMac::LteUeMac()
       m_hasSlMibToTx(false),
       m_hasSlCommToTx(false),
       m_hasSlCommToRx(false),
-      m_schedulingGrantMetric(LteUeMac::SlSchedulingGrantMetric::FIXED)
+      m_schedulingGrantMetric(LteUeMac::SlSchedulingGrantMetric::RANDOM)
 {
     NS_LOG_FUNCTION(this);
     m_miUlHarqProcessesPacket.resize(HARQ_PERIOD);
@@ -508,7 +585,7 @@ LteUeMac::SetLteUeCmacSapUser(LteUeCmacSapUser* s)
 LteUeCmacSapProvider*
 LteUeMac::GetLteUeCmacSapProvider()
 {
-    return m_cmacSapProvider;
+    return m_cmacSapProvider;   
 }
 
 void
@@ -517,11 +594,86 @@ LteUeMac::SetComponentCarrierId(uint8_t index)
     m_componentCarrierId = index;
 }
 
+// Backoff backoff;
+
+int ContentionWindow = 20;
+bool inprocess = false;
+int numOfRetries = 1;
+std::queue <std::pair<LteUePhySapProvider::TransmitSlPhySduParameters,LteMacSapProvider::TransmitPduParameters>> q;
+
+void 
+LteUeMac::sendPdu(LteUePhySapProvider::TransmitSlPhySduParameters phyParams,LteMacSapProvider::TransmitPduParameters params ){
+    // Ptr<UniformRandomVariable> randomVar = CreateObject<UniformRandomVariable>();
+    // // int randomNumber = randomVar->GetInteger(0, 1);
+    // std::cout<<isChannelIdle(m_rnti+2)<<std::endl;
+    // if(ContentionRatio[m_rnti+2]>0.1 && numOfRetries <=5){
+    // // if(randomNumber == 1){
+                
+    //             // std::cout<<Simulator::Now()<<std::endl;
+    //             Simulator::Schedule (MilliSeconds(randomVar->GetInteger(100,ContentionWindow)),&LteUeMac::sendPdu,this,phyParams,params);
+    //             numOfRetries++;
+    //             ContentionWindow = ContentionWindow * pow(2,1+ContentionRatio[m_rnti+2]);
+    //             // std::cout<<"Delayed "<<std::endl;
+
+    //             return;
+                
+    //         }
+    //         else{
+    //             ContentionWindow = 200;
+    //             numOfRetries = 1;
+    //         }
+    // std::cout<<"hi"<<std::endl;
+    // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+    m_uePhySapProvider->SendSlMacPdu(params.pdu, phyParams);
+}
+
+void
+LteUeMac::DecrementCounter(int N){
+    // std::cout<<N<<" "<<m_rnti<<std::endl;
+    if(N==0){
+        Time t = Simulator::Now();
+        int count = 0;
+        while(!q.empty()){
+            Simulator::Schedule (t+count*MicroSeconds(25),&LteUeMac::sendPdu,this,q.front().first,q.front().second);
+            count++;
+            q.pop();
+        }
+        channeloccupied = true;
+        Simulator::Schedule (MilliSeconds(2),&LteUeMac::DeoccupyChannel,this);
+    }
+    else{
+        if(isChannelIdle(m_rnti+2)){
+            N--;
+            Simulator::Schedule (MicroSeconds(9),&LteUeMac::DecrementCounter,this,N);
+        }
+        else{
+            Simulator::Schedule (MicroSeconds(34),&LteUeMac::DecrementCounter,this,N);
+        }
+    }
+}
+
+void
+LteUeMac::DeoccupyChannel(){
+    channeloccupied = false;
+    inprocess = false;
+}
+
+void
+LteUeMac::OccupyChannel(){
+    Ptr<UniformRandomVariable> randomVar = CreateObject<UniformRandomVariable>();
+    int N = randomVar->GetInteger(0, ContentionWindow);
+    inprocess = true;
+    if(N>0)DecrementCounter(N); 
+}
+
 void
 LteUeMac::DoTransmitPdu(LteMacSapProvider::TransmitPduParameters params)
 {
     NS_LOG_FUNCTION(this);
     NS_ASSERT_MSG(m_rnti == params.rnti, "RNTI mismatch between RLC and MAC");
+
+    ContentionWindow = 20;
+    numOfRetries = 1;
 
     if (params.discMsg)
     {
@@ -599,14 +751,22 @@ LteUeMac::DoTransmitPdu(LteMacSapProvider::TransmitPduParameters params)
             NS_ASSERT(rv == 0); // to be removed once confirmed
             phyParams.rv = rv == 0 ? rv : 4 - rv;
 
-            if (!m_hasUlToTx && !m_hasSlMibToTx)
-            {
-                m_uePhySapProvider->SendSlMacPdu(params.pdu, phyParams);
+            if(!channeloccupied){
+                
+                if(!inprocess){OccupyChannel();inprocess = true;std::cout<<Simulator::Now()<<"Backoffstarted"<<std::endl;}
+                q.push({phyParams,params});
             }
-            else
-            {
-                NS_LOG_DEBUG("PSSCH message not sent because of uplink or SL-MIB transmission (UL="
-                             << m_hasUlToTx << ", Sl-MIB=" << m_hasSlMibToTx << ")");
+            else {
+
+                if (!m_hasUlToTx && !m_hasSlMibToTx )
+                {
+                    sendPdu(phyParams,params);
+                }
+                else
+                {
+                    NS_LOG_DEBUG("PSSCH message not sent because of uplink or SL-MIB transmission (UL="
+                                << m_hasUlToTx << ", Sl-MIB=" << m_hasSlMibToTx << ")");
+                }
             }
         }
     }
@@ -1690,6 +1850,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
         if (!m_hasUlToTx)
         {
             NS_LOG_DEBUG("Transmitting MIB-SL message");
+            std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
             m_uePhySapProvider->SendSlMacPdu(m_slSynchPendingTxMsg, phyParams);
         }
         else
@@ -1898,6 +2059,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
 
             if (!m_hasUlToTx && !m_hasSlMibToTx)
             {
+                std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
                 m_uePhySapProvider->SendSlMacPdu(p, phyParams);
             }
             else
@@ -2098,6 +2260,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
                     phyParams.rv = rv == 0 ? 0 : 4 - rv;
                     if (!m_hasUlToTx && !m_hasSlMibToTx)
                     {
+                        std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
                         m_uePhySapProvider->SendSlMacPdu(pkt, phyParams);
                     }
                     else
@@ -2286,6 +2449,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
 
                 if (!m_hasUlToTx && !m_hasSlMibToTx && !m_hasSlCommToTx && !m_hasSlCommToRx)
                 {
+                    std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
                     m_uePhySapProvider->SendSlMacPdu(grantIt->m_discMsg, phyParams);
                 }
                 else
@@ -2510,6 +2674,9 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
             grant.m_rbLen = m_slGrantSize;
             grant.m_mcs = m_slGrantMcs;
             grant.m_tbSize = m_amc->GetUlTbSizeFromMcs(grant.m_mcs, grant.m_rbLen);
+            // 
+            // std::cout<<"Grant MCS for RNTI "<<m_rnti<<" is "<< (uint16_t) grant.m_mcs <<" at time "<<Simulator::Now ().GetSeconds()<<std::endl;
+            // std::cout<<unsigned(grant.m_rbLen)<<" "<<unsigned(grant.m_mcs)<<" "<<unsigned(grant.m_tbSize)<<std::endl;
         }
         else
         { // Dynamic SlSchedulingGrantMetric
@@ -2589,8 +2756,10 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
                     grant.m_mcs = (*ritPair).second.front().mcs;    // m_slGrantMcs;
                     grant.m_tbSize = (*ritPair).second.front().tbs; // transport block size
                     ritPair++;
+                    // std::cout<<"start"<<unsigned(grant.m_rbLen)<<std::endl;
                     for (; ritPair != kMcsPrbPairList.rend(); ritPair++)
                     {
+                        std::cout<<unsigned((*ritPair).second.front().nbRb)<<std::endl;
                         // Evaluate each first pair
                         if ((*ritPair).second.front().nbRb <= grant.m_rbLen)
                         {
@@ -2598,8 +2767,11 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
                             grant.m_rbLen = (*ritPair).second.front().nbRb;
                             grant.m_mcs = (*ritPair).second.front().mcs;
                             grant.m_tbSize = (*ritPair).second.front().tbs;
+                            // std::cout<<"hi"<<std::endl;
+                            // std::cout<<(*ritPair).second.front().nbRb<<" "<<(*ritPair).second.front().mcs<<" "<<(*ritPair).second.front().tbs<<std::endl;
                         }
                     }
+                    // std::cout<<unsigned(grant.m_rbLen)<<" "<<unsigned(grant.m_mcs)<<" "<<unsigned(grant.m_tbSize)<<std::endl;
                     break;
                 case LteUeMac::SlSchedulingGrantMetric::RANDOM:
                     NS_LOG_INFO("PSSCH RANDOM grant scheduling");
@@ -2646,7 +2818,8 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
                                                 << (uint16_t)grant.m_mcs << ", "
                                                 << (uint16_t)grant.m_rbLen
                                                 << ">, TBS= " << grant.m_tbSize);
-
+                    // std::cout<<unsigned(grant.m_rbLen)<<" "<<unsigned(grant.m_mcs)<<" "<<unsigned(grant.m_tbSize)<<std::endl;
+                    // std::cout<<"Grant MCS for RNTI "<<m_rnti<<" is "<< (uint16_t) grant.m_mcs <<" at time "<<Simulator::Now ().GetSeconds()<<std::endl;
                     break;
                 case LteUeMac::SlSchedulingGrantMetric::MAX_COVERAGE:
                     NS_LOG_INFO("PSSCH MAX_COVERAGE grant scheduling");
@@ -2683,6 +2856,7 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
                             }
                         }
                     }
+                    // std::cout<<unsigned(grant.m_rbLen)<<" "<<unsigned(grant.m_mcs)<<" "<<unsigned(grant.m_tbSize)<<std::endl;
                     break;
                 default:
                     NS_FATAL_ERROR("SCHEDULING METRIC NOT IMPLEMENTED: ");
@@ -2735,6 +2909,13 @@ LteUeMac::GetSlUeSelectedGrant(std::list<PoolInfo>::iterator poolIt)
                     << ", rbStart=" << (uint16_t)grant.m_rbStart
                     << ", rbLen=" << (uint16_t)grant.m_rbLen << ", mcs=" << (uint16_t)grant.m_mcs
                     << ",itrp=" << (uint16_t)grant.m_iTrp << ", dst=" << grant.m_dst);
+        // std::cout<<"UE selected grant: resource="
+        //             << (uint16_t)grant.m_resPscch << "/" << poolIt->m_npscch
+        //             << ", rbStart=" << (uint16_t)grant.m_rbStart
+        //             << ", rbLen=" << (uint16_t)grant.m_rbLen << ", mcs=" << (uint16_t)grant.m_mcs
+        //             << ",itrp=" << (uint16_t)grant.m_iTrp << ", dst=" << grant.m_dst<<std::endl;
+        // std::cout<<"Grant MCS for RNTI "<<m_rnti<<" is "<< (uint16_t) grant.m_rbStart <<" at time "<<Simulator::Now ().GetSeconds()<<std::endl;
+        // std::cout<<"Grant RBLEN for RNTI "<<m_rnti<<" is "<< (uint16_t) grant.m_rbLen <<" at time "<<Simulator::Now ().GetSeconds()<<std::endl;
     }
 
     else

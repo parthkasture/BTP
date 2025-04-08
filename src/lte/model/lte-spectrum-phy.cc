@@ -75,6 +75,13 @@ TbId_t::TbId_t(const uint16_t a, const uint8_t b)
 {
 }
 
+std::vector<uint32_t> temp1(50,0);
+std::vector<std::vector<uint32_t>> SINRperRBtable(10,temp1);
+std::vector<double> ContentionRatio(10,0);
+
+// extern std::vector<uint32_t> SINRperCF;
+std::vector<uint32_t> SINRperCF(5,0);
+int collisioncount = 0;
 /**
  * Equality operator
  *
@@ -695,6 +702,8 @@ LteSpectrumPhy::StartTxDataFrame(Ptr<PacketBurst> pb,
         NS_ASSERT(m_txPsd);
         m_txPacketBurst = pb;
 
+        std::cout<<"hi1"<<std::endl;
+
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
         // is done by setting the ctrlMsgList parameter of
@@ -759,6 +768,8 @@ LteSpectrumPhy::StartTxSlMibFrame(Ptr<PacketBurst> pb, Time duration)
         NS_ASSERT(m_txPsd);
         m_txPacketBurst = pb;
 
+        // std::cout<<"hi1"<<std::endl;
+
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
         // is done by setting the ctrlMsgList parameter of
@@ -820,6 +831,8 @@ LteSpectrumPhy::StartTxSlCtrlFrame(Ptr<PacketBurst> pb, Time duration)
         */
         NS_ASSERT(m_txPsd);
         m_txPacketBurst = pb;
+
+        // std::cout<<"hi2"<<std::endl;
 
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
@@ -883,6 +896,8 @@ LteSpectrumPhy::StartTxSlDataFrame(Ptr<PacketBurst> pb, Time duration, uint8_t g
         NS_ASSERT(m_txPsd);
         m_txPacketBurst = pb;
 
+        // std::cout<<"hi3"<<std::endl;
+
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
         // is done by setting the ctrlMsgList parameter of
@@ -903,6 +918,40 @@ LteSpectrumPhy::StartTxSlDataFrame(Ptr<PacketBurst> pb, Time duration, uint8_t g
 
         m_channel->StartTx(txParams);
         m_endTxEvent = Simulator::Schedule(duration, &LteSpectrumPhy::EndTxData, this);
+
+        // std::cout<<"hi"<<std::endl;
+
+        m_rxControlMessageList = txParams->ctrlMsgList;
+
+                  
+                  /*********************************MODIFIED************************************/
+
+
+                  for(auto it=m_rxControlMessageList.begin(); it!=m_rxControlMessageList.end(); it++){
+                    Ptr<LteControlMessage> msg = (*it);
+
+                    if (msg->GetMessageType () == LteControlMessage::DL_DCI)
+                    {
+                      Ptr<DlDciLteControlMessage> msg2 = DynamicCast<DlDciLteControlMessage> (msg);
+
+                      DlDciListElement_s dci = msg2->GetDci ();
+                    
+                      //LteRadioBearerTag tag;
+                      //msg->PeekPacketTag (tag);
+                      // u_int16_t m_rnti = tag.GetRnti();
+                      // std::cout<<"\nSpectrum RNTI: "<<m_rnti;
+                      // if (dci.m_rnti != m_rnti)
+                      // {
+                      //   // DCI not for me
+                      //   continue;
+                      // }
+                    
+                  
+
+                      std::cout<<"\nRB bitmap for UE with node ID "<<GetDevice()->GetNode()->GetId()<<"is: "<< dci.m_rbBitmap;
+                    }
+
+                  }
     }
         return false;
         break;
@@ -945,6 +994,8 @@ LteSpectrumPhy::StartTxSlDiscFrame(Ptr<PacketBurst> pb, uint32_t resNo, uint8_t 
         */
         NS_ASSERT(m_txPsd);
         m_txPacketBurst = pb;
+
+        // std::cout<<"hi4"<<std::endl;
 
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
@@ -1012,6 +1063,8 @@ LteSpectrumPhy::StartTxDlCtrlFrame(std::list<Ptr<LteControlMessage>> ctrlMsgList
         ChangeState(TX_DL_CTRL);
         NS_ASSERT(m_channel);
 
+        // std::cout<<"hi5"<<std::endl;
+
         Ptr<LteSpectrumSignalParametersDlCtrlFrame> txParams =
             Create<LteSpectrumSignalParametersDlCtrlFrame>();
         txParams->duration = DL_CTRL_DURATION;
@@ -1061,6 +1114,8 @@ LteSpectrumPhy::StartTxUlSrsFrame()
         */
         NS_ASSERT(m_txPsd);
         NS_LOG_LOGIC(this << " m_txPsd: " << *m_txPsd);
+
+        // std::cout<<"hi6"<<std::endl;
 
         // we need to convey some PHY meta information to the receiver
         // to be used for simulation purposes (e.g., the CellId). This
@@ -1125,6 +1180,8 @@ LteSpectrumPhy::StartRx(Ptr<SpectrumSignalParameters> spectrumRxParams)
 {
     NS_LOG_FUNCTION(this << spectrumRxParams);
     NS_LOG_LOGIC(this << " state: " << m_state);
+
+    // std::cout<<"rec2"<<std::endl;
 
     Ptr<const SpectrumValue> rxPsd = spectrumRxParams->psd;
     Time duration = spectrumRxParams->duration;
@@ -1197,6 +1254,8 @@ LteSpectrumPhy::StartRxData(Ptr<LteSpectrumSignalParametersDataFrame> params)
         break;
     case IDLE:
     case RX_DATA:
+
+    // std::cout<<"rec3"<<std::endl;
         // the behavior is similar when
         // we're IDLE or RX because we can receive more signals
         // simultaneously (e.g., at the eNB).
@@ -1285,12 +1344,15 @@ LteSpectrumPhy::StartRxSlFrame(Ptr<LteSpectrumSignalParametersSlFrame> params)
         // we're IDLE or RX because we can receive more signals
         // simultaneously (e.g., at the eNB).
         {
+            // std::cout<<"rec1"<<std::endl;
             // check it is not an eNB and not the same sending node (Sidelink : discovery &
             // communication )
             if (m_cellId == 0 && params->nodeId != GetDevice()->GetNode()->GetId())
             {
                 NS_LOG_LOGIC("The signal is neither from eNodeB nor from this UE");
                 NS_LOG_DEBUG("Signal is from Node id = " << params->nodeId);
+
+                // std::cout<<params->nodeId<<std::endl;
 
                 // SLSSs (PSBCH) should be received by all UEs
                 // Checking if it is a SLSS, and if it is: measure S-RSRP and receive MIB-SL
@@ -1343,6 +1405,20 @@ LteSpectrumPhy::StartRxSlFrame(Ptr<LteSpectrumSignalParametersSlFrame> params)
                     SlRxPacketInfo_t packetInfo;
                     packetInfo.params = params;
                     packetInfo.rbBitmap = rbMap;
+
+                    // for(auto i:rbMap){
+                    //     std::cout<<i<<" ";
+                    // }
+
+                    // auto currid = GetDevice()->GetNode()->GetId();
+
+                    // if(currid==5 || currid==3 || currid==4){
+                    //     std::cout<<Simulator::Now()<<" Node"<<currid<<": ";
+                    //     for(int i=0;i<50;i++)std::cout<<SINRperRBtable[currid][i]<<" ";
+                    //     std::cout<<std::endl;
+                    // }
+
+                    // std::cout<<std::endl;
                     m_rxPacketInfo.push_back(packetInfo);
                     if (params->packetBurst)
                     {
@@ -1542,12 +1618,75 @@ LteSpectrumPhy::UpdateSinrPerceived(const SpectrumValue& sinr)
     m_sinrPerceived = sinr;
 }
 
+
 void
-LteSpectrumPhy::UpdateSlSinrPerceived(std::vector<SpectrumValue> sinr)
+LteSpectrumPhy::UpdateSlSinrPerceived (std::vector<SpectrumValue> sinr)
 {
-    NS_LOG_FUNCTION(this);
-    m_slSinrPerceived = sinr;
+  NS_LOG_FUNCTION (this);
+  
+  uint32_t index = GetDevice ()->GetNode ()->GetId ();
+  for (uint32_t i = 0; i < sinr.size (); i++)
+    {
+      SpectrumValue temp = sinr[i];
+
+      for (uint32_t j = 0; j < temp.GetValuesN (); j++) 
+        {
+          if (temp.ValuesAt (j) != 0)
+            {
+              SINRperRBtable[index][j]=temp.ValuesAt (j);
+              SINRperCF[index/2]=temp.ValuesAt (j);
+            }
+        }
+      
+    }
+    
+  for (uint32_t i = 0; i < SINRperRBtable.size (); i++)
+    {
+      double count_of_busy_rb = 0;
+
+      for (uint32_t j = 0; j < SINRperRBtable[i].size(); j++)
+        {
+          if(SINRperRBtable[i][j]==1)count_of_busy_rb++;
+          
+        }
+        ContentionRatio[i] = count_of_busy_rb/double(SINRperRBtable[i].size());
+        // std::cout<<ContentionRatio[i]<<" ";
+      
+    }
+
+    // for (uint32_t i = 0; i < SINRperRBtable.size (); i++)
+    // {
+
+    //   for (uint32_t j = 0; j < SINRperRBtable[0].size(); j++)
+    //     {
+    //       std::cout<<SINRperRBtable[i][j]<<" ";
+    //     }
+    //     std::cout<<std::endl;
+      
+    // }
+  // for (uint32_t i = 0; i < SINRperCF.size (); i++)
+  //   {  
+  //     std::cout<<SINRperCF[i]<<" "; 
+  //   }
+//   std::cout<<std::endl;
+    
+  m_slSinrPerceived = sinr;
 }
+
+bool isChannelIdle(uint16_t node){
+    int freeRb = 0;
+    for(uint32_t i=0;i<SINRperRBtable[node].size();i++){
+        if(SINRperRBtable[node][i]==0)freeRb++;
+    }
+    return freeRb > 10;
+}
+
+// void
+// LteSpectrumPhy::UpdateSlSinrPerceived(std::vector<SpectrumValue> sinr)
+// {
+//     NS_LOG_FUNCTION(this);
+//     m_slSinrPerceived = sinr;
+// }
 
 void
 LteSpectrumPhy::UpdateSlSigPerceived(std::vector<SpectrumValue> signal)
@@ -2173,6 +2312,8 @@ LteSpectrumPhy::RxSlPscch(std::vector<uint32_t> pktIndexes)
         params.m_mcs = sciHeader.GetMcs();
         params.m_groupDstId = sciHeader.GetGroupDstId();
         params.m_correctness = (uint8_t)!corrupt;
+
+        // std::cout<<"RNTI "<<params.m_rnti<<" GroupDstId "<<int(params.m_groupDstId)<<" RbStart "<<int(params.m_rbStart)<<" RbLen "<<int(params.m_rbLen)<<std::endl;
         // Call trace
         m_slPscchReception(params);
     }
@@ -2238,8 +2379,10 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
     }
 
     std::set<int> collidedRbBitmap;
+    // std::cout<<"Hi";
     if (m_dropRbOnCollisionEnabled)
     {
+        // std::cout<<"Hi";
         NS_LOG_DEBUG(this << " PSSCH DropOnCollisionEnabled: Identifying RB Collisions");
         std::set<int> collidedRbBitmapTemp;
         for (auto itTb = m_expectedSlTbs.begin(); itTb != m_expectedSlTbs.end(); itTb++)
@@ -2256,6 +2399,7 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
                 {
                     // store resources used by the packet to detect collision
                     collidedRbBitmapTemp.insert(*rbIt);
+                    // std::cout<<"Hi";
                 }
             }
         }
@@ -2297,6 +2441,9 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
                         if (collidedRbBitmap.find(*rbIt) != collidedRbBitmap.end())
                         {
                             NS_LOG_DEBUG(*rbIt << " collided, labeled as corrupted!");
+                            // {std::cout<<*rbIt<<" collided"<<std::endl;
+                            // collisioncount++;
+                            // std::cout<<collisioncount<<std::endl;}
                             rbCollided = true;
                             (*itTb).second.corrupt = true;
                             break;
@@ -2347,6 +2494,9 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
                         if (collidedRbBitmap.find(*rbIt) != collidedRbBitmap.end())
                         {
                             NS_LOG_DEBUG(*rbIt << " collided, labeled as corrupted!");
+                            // std::cout<<*rbIt<<" collided"<<std::endl;
+                            // collisioncount++;
+                            // std::cout<<collisioncount<<std::endl;
                             rbCollided = true;
                             (*itTb).second.corrupt = true;
                             break;
@@ -2840,6 +2990,7 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
 
         for (auto it = sortedControlMessages.begin(); it != sortedControlMessages.end(); it++)
         {
+            // std::cout<<"Hi";
             uint32_t pktIndex = (*it).index;
             for (auto rbIt = m_rxPacketInfo.at(pktIndex).rbBitmap.begin();
                  rbIt != m_rxPacketInfo.at(pktIndex).rbBitmap.end();
@@ -2855,6 +3006,7 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                 {
                     // store resources used by the packet to detect collision
                     collidedRbBitmapTemp.insert((*rbIt));
+                    // std::cout<<"Hi";
                 }
             }
         }
@@ -2880,6 +3032,9 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                 {
                     corrupt = true;
                     NS_LOG_DEBUG(this << " RB " << *rbIt << " has collided");
+                    std::cout<<this << " RB " << *rbIt << " has collided"<<std::endl;
+                    collisioncount++;
+                    std::cout<<collisioncount<<std::endl;
                     break;
                 }
                 if (rbDecodedBitmap.find(*rbIt) != rbDecodedBitmap.end())
@@ -2922,6 +3077,9 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                     {
                         corrupt = true;
                         NS_LOG_DEBUG(this << " RB " << *rbIt << " has collided");
+                        std::cout<<this << " RB " << *rbIt << " has collided"<<std::endl;
+                        collisioncount++;
+                        std::cout<<collisioncount<<std::endl;
                         break;
                     }
                 }

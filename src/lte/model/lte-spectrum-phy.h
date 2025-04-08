@@ -51,6 +51,9 @@
 namespace ns3
 {
 
+extern std::vector<double> ContentionRatio;
+extern bool isChannelIdle(uint16_t node);
+
 /// TbId_t structure
 struct TbId_t
 {
@@ -66,7 +69,7 @@ struct TbId_t
      * \param b Layer
      */
     TbId_t(const uint16_t a, const uint8_t b);
-
+    
     /**
      * \brief Implements equal operator
      * \param a element to compare
@@ -961,6 +964,8 @@ class LteSpectrumPhy : public SpectrumPhy
      * \param pktIndexes Indexes of PSBCH messages received
      */
     void RxSlPsbch(std::vector<uint32_t> pktIndexes);
+
+    
 
     Ptr<MobilityModel> m_mobility; ///< the mobility model
     Ptr<AntennaModel> m_antenna;   ///< the antenna model
