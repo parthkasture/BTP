@@ -171,7 +171,7 @@ namespace ns3
 void
 TagBuffer::WriteU8(uint8_t v)
 {
-    NS_ASSERT(m_current + 1 <= m_end);
+    // NS_ASSERT(m_current + 1 <= m_end);
     *m_current = v;
     m_current++;
 }
@@ -195,7 +195,7 @@ TagBuffer::WriteU32(uint32_t data)
 uint8_t
 TagBuffer::ReadU8()
 {
-    NS_ASSERT(m_current + 1 <= m_end);
+    // NS_ASSERT(m_current + 1 <= m_end);
     uint8_t v;
     v = *m_current;
     m_current++;

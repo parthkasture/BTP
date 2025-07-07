@@ -30,6 +30,7 @@
 #include "lte-sl-header.h"
 #include "lte-sl-tag.h"
 #include "lte-spectrum-signal-parameters.h"
+#include "lte-ue-phy.h"
 
 #include "ns3/enum.h"
 #include <ns3/antenna-model.h>
@@ -45,6 +46,7 @@
 #include <ns3/trace-source-accessor.h>
 
 #include <cmath>
+#include <queue>
 
 namespace ns3
 {
@@ -78,6 +80,8 @@ TbId_t::TbId_t(const uint16_t a, const uint8_t b)
 std::vector<uint32_t> temp1(50,0);
 std::vector<std::vector<uint32_t>> SINRperRBtable(10,temp1);
 std::vector<double> ContentionRatio(10,0);
+std::vector<int> ackStatus(2000,0);
+std::queue <int> ack;
 
 // extern std::vector<uint32_t> SINRperCF;
 std::vector<uint32_t> SINRperCF(5,0);
@@ -789,6 +793,21 @@ LteSpectrumPhy::StartTxSlMibFrame(Ptr<PacketBurst> pb, Time duration)
 
         m_channel->StartTx(txParams);
         m_endTxEvent = Simulator::Schedule(duration, &LteSpectrumPhy::EndTxData, this);
+        std::vector<int> rbMap;
+                    int rbI = 0;
+                    for (auto it = txParams->psd->ConstValuesBegin();
+                         it != txParams->psd->ConstValuesEnd();
+                         it++, rbI++)
+                    {
+                        if (*it != 0)
+                        {
+                            NS_LOG_INFO("Sidelink message arriving on RB " << rbI);
+                            {
+                                // std::cout<<rbI<<std::endl;
+                            }
+                            rbMap.push_back(rbI);
+                        }
+                    }
     }
         return false;
         break;
@@ -853,6 +872,22 @@ LteSpectrumPhy::StartTxSlCtrlFrame(Ptr<PacketBurst> pb, Time duration)
 
         m_channel->StartTx(txParams);
         m_endTxEvent = Simulator::Schedule(duration, &LteSpectrumPhy::EndTxData, this);
+        // std::cout<<"HI"<<std::endl;
+        std::vector<int> rbMap;
+                    int rbI = 0;
+                    for (auto it = txParams->psd->ConstValuesBegin();
+                         it != txParams->psd->ConstValuesEnd();
+                         it++, rbI++)
+                    {
+                        if (*it != 0)
+                        {
+                            NS_LOG_INFO("Sidelink message arriving on RB " << rbI);
+                            {
+                                // std::cout<<rbI<<std::endl;
+                            }
+                            rbMap.push_back(rbI);
+                        }
+                    }
     }
         return false;
         break;
@@ -920,6 +955,21 @@ LteSpectrumPhy::StartTxSlDataFrame(Ptr<PacketBurst> pb, Time duration, uint8_t g
         m_endTxEvent = Simulator::Schedule(duration, &LteSpectrumPhy::EndTxData, this);
 
         // std::cout<<"hi"<<std::endl;
+        std::vector<int> rbMap;
+                    int rbI = 0;
+                    for (auto it = txParams->psd->ConstValuesBegin();
+                         it != txParams->psd->ConstValuesEnd();
+                         it++, rbI++)
+                    {
+                        if (*it != 0)
+                        {
+                            NS_LOG_INFO("Sidelink message arriving on RB " << rbI);
+                            {
+                                // std::cout<<rbI<<std::endl;
+                            }
+                            rbMap.push_back(rbI);
+                        }
+                    }
 
         m_rxControlMessageList = txParams->ctrlMsgList;
 
@@ -1018,6 +1068,21 @@ LteSpectrumPhy::StartTxSlDiscFrame(Ptr<PacketBurst> pb, uint32_t resNo, uint8_t 
 
         m_channel->StartTx(txParams);
         m_endTxEvent = Simulator::Schedule(duration, &LteSpectrumPhy::EndTxData, this);
+        std::vector<int> rbMap;
+                    int rbI = 0;
+                    for (auto it = txParams->psd->ConstValuesBegin();
+                         it != txParams->psd->ConstValuesEnd();
+                         it++, rbI++)
+                    {
+                        if (*it != 0)
+                        {
+                            NS_LOG_INFO("Sidelink message arriving on RB " << rbI);
+                            {
+                                // std::cout<<rbI<<std::endl;
+                            }
+                            rbMap.push_back(rbI);
+                        }
+                    }
     }
         return false;
 
@@ -1398,9 +1463,19 @@ LteSpectrumPhy::StartRxSlFrame(Ptr<LteSpectrumSignalParametersSlFrame> params)
                         if (*it != 0)
                         {
                             NS_LOG_INFO("Sidelink message arriving on RB " << rbI);
+                            {
+                                // std::cout<<rbI<<std::endl;
+                            }
                             rbMap.push_back(rbI);
                         }
                     }
+
+                    if(ack.size()==100){
+                        if(ack.front()==1)rec--;
+                        ack.pop();
+                    }
+                    ack.push(1);
+                    rec++;
 
                     SlRxPacketInfo_t packetInfo;
                     packetInfo.params = params;
@@ -1646,7 +1721,7 @@ LteSpectrumPhy::UpdateSlSinrPerceived (std::vector<SpectrumValue> sinr)
 
       for (uint32_t j = 0; j < SINRperRBtable[i].size(); j++)
         {
-          if(SINRperRBtable[i][j]==1)count_of_busy_rb++;
+          if(SINRperRBtable[i][j]<=4)count_of_busy_rb++;
           
         }
         ContentionRatio[i] = count_of_busy_rb/double(SINRperRBtable[i].size());
@@ -1656,7 +1731,7 @@ LteSpectrumPhy::UpdateSlSinrPerceived (std::vector<SpectrumValue> sinr)
 
     // for (uint32_t i = 0; i < SINRperRBtable.size (); i++)
     // {
-
+    //     std::cout<<"node "<<i<<" ////////"<<std::endl;
     //   for (uint32_t j = 0; j < SINRperRBtable[0].size(); j++)
     //     {
     //       std::cout<<SINRperRBtable[i][j]<<" ";
@@ -1678,7 +1753,7 @@ bool isChannelIdle(uint16_t node){
     for(uint32_t i=0;i<SINRperRBtable[node].size();i++){
         if(SINRperRBtable[node][i]==0)freeRb++;
     }
-    return freeRb > 10;
+    return freeRb > 5;
 }
 
 // void
@@ -2200,6 +2275,8 @@ LteSpectrumPhy::RxSlPscch(std::vector<uint32_t> pktIndexes)
                 if (collidedRbBitmapTemp.find(*rbIt) != collidedRbBitmapTemp.end())
                 {
                     // collision, update the bitmap
+                    collisioncount++;
+                    // std::cout<<collisioncount<<std::endl;
                     collidedRbBitmap.insert(*rbIt);
                     break;
                 }
@@ -2375,6 +2452,12 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
         SlTbId_t tbId;
         tbId.m_rnti = tag.GetRnti();
         tbId.m_l1dst = tag.GetDestinationL2Id() & 0xFF;
+        // ackStatus[tag.GetSequenceNo()]=1;
+        int temp = 0;
+        // for(uint16_t i=tag.GetSequenceNo();i>=std::max((0),tag.GetSequenceNo()-100);i++){
+        //     if(ackStatus[i])temp++;
+        // }
+        rec = temp;
         expectedTbToSinrIndex.insert(std::pair<SlTbId_t, uint32_t>(tbId, pktIndex));
     }
 
@@ -2442,8 +2525,8 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
                         {
                             NS_LOG_DEBUG(*rbIt << " collided, labeled as corrupted!");
                             // {std::cout<<*rbIt<<" collided"<<std::endl;
-                            // collisioncount++;
-                            // std::cout<<collisioncount<<std::endl;}
+                            collisioncount++;
+                            // std::cout<<collisioncount<<std::endl;
                             rbCollided = true;
                             (*itTb).second.corrupt = true;
                             break;
@@ -2495,7 +2578,7 @@ LteSpectrumPhy::RxSlPssch(std::vector<uint32_t> pktIndexes)
                         {
                             NS_LOG_DEBUG(*rbIt << " collided, labeled as corrupted!");
                             // std::cout<<*rbIt<<" collided"<<std::endl;
-                            // collisioncount++;
+                            collisioncount++;
                             // std::cout<<collisioncount<<std::endl;
                             rbCollided = true;
                             (*itTb).second.corrupt = true;
@@ -2999,6 +3082,8 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                 if (collidedRbBitmapTemp.find(*rbIt) != collidedRbBitmapTemp.end())
                 {
                     // collision, update the bitmap
+                    collisioncount++;
+                    // std::cout<<collisioncount<<std::endl;
                     collidedRbBitmap.insert(*rbIt);
                     break;
                 }
@@ -3034,7 +3119,7 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                     NS_LOG_DEBUG(this << " RB " << *rbIt << " has collided");
                     std::cout<<this << " RB " << *rbIt << " has collided"<<std::endl;
                     collisioncount++;
-                    std::cout<<collisioncount<<std::endl;
+                    // std::cout<<collisioncount<<std::endl;
                     break;
                 }
                 if (rbDecodedBitmap.find(*rbIt) != rbDecodedBitmap.end())
@@ -3079,7 +3164,7 @@ LteSpectrumPhy::RxSlPsbch(std::vector<uint32_t> pktIndexes)
                         NS_LOG_DEBUG(this << " RB " << *rbIt << " has collided");
                         std::cout<<this << " RB " << *rbIt << " has collided"<<std::endl;
                         collisioncount++;
-                        std::cout<<collisioncount<<std::endl;
+                        // std::cout<<collisioncount<<std::endl;
                         break;
                     }
                 }

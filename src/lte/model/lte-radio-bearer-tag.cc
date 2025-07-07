@@ -105,6 +105,20 @@ LteRadioBearerTag::LteRadioBearerTag(uint16_t rnti,
 {
 }
 
+// LteRadioBearerTag::LteRadioBearerTag(uint16_t rnti,
+//                                     uint8_t lcid,
+//                                     uint32_t srcL2Id,
+//                                     uint32_t dstL2Id,
+//                                     uint16_t sNo)
+//     : m_rnti(rnti),
+//     m_lcid(lcid),
+//     m_layer(0),
+//     m_srcL2Id(srcL2Id),
+//     m_dstL2Id(dstL2Id),
+//     seqNo(sNo)
+//     {
+// }
+
 void
 LteRadioBearerTag::SetRnti(uint16_t rnti)
 {
@@ -135,6 +149,11 @@ LteRadioBearerTag::SetDestinationL2Id(uint32_t dst)
     m_dstL2Id = dst;
 }
 
+// void 
+// LteRadioBearerTag::SetSequenceNo(uint16_t sNo){
+//     seqNo = sNo;
+// }
+
 uint32_t
 LteRadioBearerTag::GetSerializedSize() const
 {
@@ -149,6 +168,7 @@ LteRadioBearerTag::Serialize(TagBuffer i) const
     i.WriteU8(m_layer);
     i.WriteU32(m_srcL2Id);
     i.WriteU32(m_dstL2Id);
+    // i.WriteU16(seqNo);
 }
 
 void
@@ -159,6 +179,7 @@ LteRadioBearerTag::Deserialize(TagBuffer i)
     m_layer = (uint8_t)i.ReadU8();
     m_srcL2Id = (uint32_t)i.ReadU32();
     m_dstL2Id = (uint32_t)i.ReadU32();
+    // seqNo = (uint16_t)i.ReadU16();
 }
 
 uint16_t
@@ -190,6 +211,12 @@ LteRadioBearerTag::GetDestinationL2Id() const
 {
     return m_dstL2Id;
 }
+
+// uint16_t
+// LteRadioBearerTag::GetSequenceNo() const
+// {
+//     return seqNo;
+// }
 
 void
 LteRadioBearerTag::Print(std::ostream& os) const

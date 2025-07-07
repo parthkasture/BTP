@@ -44,6 +44,9 @@ class PacketBurst;
 class LteEnbPhy;
 class LteHarqPhy;
 
+extern int rec;
+extern int sen;
+
 /**
  * \ingroup lte
  *

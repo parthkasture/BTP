@@ -52,6 +52,7 @@ namespace ns3
 {
 
 extern std::vector<double> ContentionRatio;
+extern std::vector<int> ackStatus;
 extern bool isChannelIdle(uint16_t node);
 
 /// TbId_t structure

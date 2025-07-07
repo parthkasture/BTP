@@ -30,6 +30,7 @@
 #include "lte-sl-header.h"
 #include "lte-sl-tag.h"
 #include "lte-spectrum-phy.h"
+#include "lte-ue-phy.h"
 
 #include <ns3/boolean.h>
 #include <ns3/enum.h>
@@ -597,20 +598,23 @@ LteUeMac::SetComponentCarrierId(uint8_t index)
 // Backoff backoff;
 
 int ContentionWindow = 20;
-bool inprocess = false;
+
 int numOfRetries = 1;
-std::queue <std::pair<LteUePhySapProvider::TransmitSlPhySduParameters,LteMacSapProvider::TransmitPduParameters>> q;
+
+std::queue <std::pair<ns3::Ptr<ns3::Packet>,LteUePhySapProvider::TransmitSlPhySduParameters>> q;
+
+
 
 void 
-LteUeMac::sendPdu(LteUePhySapProvider::TransmitSlPhySduParameters phyParams,LteMacSapProvider::TransmitPduParameters params ){
-    // Ptr<UniformRandomVariable> randomVar = CreateObject<UniformRandomVariable>();
+LteUeMac::sendPdu(ns3::Ptr<ns3::Packet> p,LteUePhySapProvider::TransmitSlPhySduParameters phyParams ){
+    Ptr<UniformRandomVariable> randomVar = CreateObject<UniformRandomVariable>();
     // // int randomNumber = randomVar->GetInteger(0, 1);
     // std::cout<<isChannelIdle(m_rnti+2)<<std::endl;
     // if(ContentionRatio[m_rnti+2]>0.1 && numOfRetries <=5){
-    // // if(randomNumber == 1){
+    // // // if(randomNumber == 1){
                 
     //             // std::cout<<Simulator::Now()<<std::endl;
-    //             Simulator::Schedule (MilliSeconds(randomVar->GetInteger(100,ContentionWindow)),&LteUeMac::sendPdu,this,phyParams,params);
+    //             Simulator::Schedule (MilliSeconds(randomVar->GetInteger(100,ContentionWindow)),&LteUeMac::sendPdu,this,p,phyParams);
     //             numOfRetries++;
     //             ContentionWindow = ContentionWindow * pow(2,1+ContentionRatio[m_rnti+2]);
     //             // std::cout<<"Delayed "<<std::endl;
@@ -622,24 +626,22 @@ LteUeMac::sendPdu(LteUePhySapProvider::TransmitSlPhySduParameters phyParams,LteM
     //             ContentionWindow = 200;
     //             numOfRetries = 1;
     //         }
-    // std::cout<<"hi"<<std::endl;
-    // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
-    m_uePhySapProvider->SendSlMacPdu(params.pdu, phyParams);
+    m_uePhySapProvider->SendSlMacPdu(p, phyParams);
 }
 
 void
 LteUeMac::DecrementCounter(int N){
-    // std::cout<<N<<" "<<m_rnti<<std::endl;
     if(N==0){
         Time t = Simulator::Now();
         int count = 0;
         while(!q.empty()){
-            Simulator::Schedule (t+count*MicroSeconds(25),&LteUeMac::sendPdu,this,q.front().first,q.front().second);
+            Simulator::Schedule (t+count*MicroSeconds(9),&LteUeMac::sendPdu,this,q.front().first,q.front().second);
             count++;
             q.pop();
         }
         channeloccupied = true;
-        Simulator::Schedule (MilliSeconds(2),&LteUeMac::DeoccupyChannel,this);
+        inprocess = false;
+        Simulator::Schedule (MilliSeconds(6),&LteUeMac::DeoccupyChannel,this);
     }
     else{
         if(isChannelIdle(m_rnti+2)){
@@ -661,8 +663,29 @@ LteUeMac::DeoccupyChannel(){
 void
 LteUeMac::OccupyChannel(){
     Ptr<UniformRandomVariable> randomVar = CreateObject<UniformRandomVariable>();
+
+    /************* Use below line for SBBA algorithm ****************************/
+
+    
+
+    ContentionWindow = 200 + (800)/(1+exp(-100*(ContentionRatio[m_rnti+2]-0.5)));
+
+    //******** CW = CWmin + (CWmax - CWmin)/(1+exp(-alpha*(FCR - 0.5)))***********/
+    // use alpha = 20 for 32kbps and alpha = 100 for 64kbps in above formula
+
+    /****************************************************************************/
+
+    /********************Use below for standard 3GPP */
+    // if((rec+1)/(sen+1)<0.1){
+    //     if(ContentionWindow<1000)ContentionWindow *= 2;
+    // }
+    // else ContentionWindow = 20;
+    /******************************************************* */
+
+
+    // std::cout<<ContentionWindow<<std::endl;
+
     int N = randomVar->GetInteger(0, ContentionWindow);
-    inprocess = true;
     if(N>0)DecrementCounter(N); 
 }
 
@@ -672,8 +695,6 @@ LteUeMac::DoTransmitPdu(LteMacSapProvider::TransmitPduParameters params)
     NS_LOG_FUNCTION(this);
     NS_ASSERT_MSG(m_rnti == params.rnti, "RNTI mismatch between RLC and MAC");
 
-    ContentionWindow = 20;
-    numOfRetries = 1;
 
     if (params.discMsg)
     {
@@ -737,7 +758,8 @@ LteUeMac::DoTransmitPdu(LteMacSapProvider::TransmitPduParameters params)
 
             NS_ASSERT((*allocIt).subframe.frameNo == frameNo &&
                       (*allocIt).subframe.subframeNo == subframeNo);
-
+            
+            // params.seqNo = num++;
             LteRadioBearerTag tag(params.rnti, params.lcid, params.srcL2Id, params.dstL2Id);
             params.pdu->AddPacketTag(tag);
             // store pdu in HARQ buffer
@@ -750,17 +772,26 @@ LteUeMac::DoTransmitPdu(LteMacSapProvider::TransmitPduParameters params)
             uint8_t rv = poolIt->m_psschTx.size() % 4;
             NS_ASSERT(rv == 0); // to be removed once confirmed
             phyParams.rv = rv == 0 ? rv : 4 - rv;
-
-            if(!channeloccupied){
-                
-                if(!inprocess){OccupyChannel();inprocess = true;std::cout<<Simulator::Now()<<"Backoffstarted"<<std::endl;}
-                q.push({phyParams,params});
+            if(Simulator::Now()<Seconds(3)){
+                rec = 0;
+                sen = 0;
             }
-            else {
 
+            {
                 if (!m_hasUlToTx && !m_hasSlMibToTx )
-                {
-                    sendPdu(phyParams,params);
+                {   
+                    // std::cout<<"node inside"<<m_rnti<<std::endl;
+                    // std::cout<<m_rnti<<" "<<channeloccupied<<" "<<inprocess<<std::endl;
+
+                    /* Below section is for SBBA and 3GPP */
+                    // use 0.5 for 32kbps and 0.1 for 64kbps
+                    if(!channeloccupied && Simulator::Now()>Seconds(4) && ContentionRatio[m_rnti+2]>0.1){ // Use this line for SBBA algorithm
+                    // if( !channeloccupied && Simulator::Now()>Seconds(4)){  // Use this line for Standard 3GPP backoff
+                
+                        if(!inprocess){OccupyChannel();inprocess = true;}
+                        q.push({params.pdu,phyParams});
+                    }
+                    else sendPdu(params.pdu,phyParams);
                 }
                 else
                 {
@@ -1847,11 +1878,13 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
         phyParams.rbLen = 6;
         phyParams.rv = 0;
         m_hasSlMibToTx = true;
+        {
         if (!m_hasUlToTx)
         {
             NS_LOG_DEBUG("Transmitting MIB-SL message");
-            std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+            // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
             m_uePhySapProvider->SendSlMacPdu(m_slSynchPendingTxMsg, phyParams);
+            // sendPdu(m_slSynchPendingTxMsg,phyParams);
         }
         else
         {
@@ -1859,6 +1892,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
         }
         // clear pending message
         m_slSynchPendingTxMsg = nullptr;
+    }
     }
 
     // Sidelink Communication
@@ -2056,17 +2090,20 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
             phyParams.resNo = poolIt->m_currentGrant.m_resPscch;
 
             m_hasSlCommToTx = true;
-
+            {
             if (!m_hasUlToTx && !m_hasSlMibToTx)
             {
-                std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+                // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+            
                 m_uePhySapProvider->SendSlMacPdu(p, phyParams);
+                // else sendPdu(p,phyParams);
             }
             else
             {
                 NS_LOG_DEBUG("SCI message not sent because of uplink or SL-MIB transmission (UL="
                              << m_hasUlToTx << ", Sl-MIB=" << m_hasSlMibToTx << ")");
             }
+        }
 
             // Collect statistics for SL PSCCH UE MAC scheduling trace
             SlUeMacStatParameters pscchStatsParams;
@@ -2258,10 +2295,12 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
                     phyParams.rbLen = (*allocIt).nbRb;
                     uint8_t rv = poolIt->m_psschTx.size() % 4;
                     phyParams.rv = rv == 0 ? 0 : 4 - rv;
+                    {
                     if (!m_hasUlToTx && !m_hasSlMibToTx)
                     {
-                        std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+                        // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
                         m_uePhySapProvider->SendSlMacPdu(pkt, phyParams);
+                        // sendPdu(pkt,phyParams);
                     }
                     else
                     {
@@ -2269,6 +2308,7 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
                             "PSSCH message not sent because of uplink or SL-MIB transmission (UL="
                             << m_hasUlToTx << ", Sl-MIB=" << m_hasSlMibToTx << ")");
                     }
+                }
                 }
             }
             // Collect statistics for SL PSSCH UE MAC scheduling trace
@@ -2446,11 +2486,12 @@ LteUeMac::DoSlDelayedSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
                 phyParams.resNo = grantIt->m_resPsdch;
                 uint8_t rv = grantIt->m_psdchTx.size() % (m_discTxPool.m_pool->GetNumRetx() + 1);
                 phyParams.rv = rv == 0 ? rv : m_discTxPool.m_pool->GetNumRetx() + 1 - rv;
-
+                
                 if (!m_hasUlToTx && !m_hasSlMibToTx && !m_hasSlCommToTx && !m_hasSlCommToRx)
                 {
-                    std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
+                    // std::cout<<Simulator::Now()<<"sent"<<m_rnti<<std::endl;
                     m_uePhySapProvider->SendSlMacPdu(grantIt->m_discMsg, phyParams);
+                    // sendPdu(grantIt->m_discMsg,phyParams);
                 }
                 else
                 {

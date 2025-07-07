@@ -451,6 +451,9 @@ LteUePhy::GetTypeId()
     return tid;
 }
 
+int rec = 0;
+int sen = 0;
+
 void
 LteUePhy::DoInitialize()
 {
@@ -654,11 +657,12 @@ LteUePhy::GetSlSpectrumPhy() const
     return m_sidelinkSpectrumPhy;
 }
 
+
 void
 LteUePhy::DoSendSlMacPdu(Ptr<Packet> p, LteUePhySapProvider::TransmitSlPhySduParameters params)
 {
     NS_LOG_FUNCTION(this);
-
+    
     SetMacPdu(p);
     // NS_ASSERT_MSG(m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).empty(),
     //               "Error: Can only send one sidelink message per TTI");
@@ -666,6 +670,9 @@ LteUePhy::DoSendSlMacPdu(Ptr<Packet> p, LteUePhySapProvider::TransmitSlPhySduPar
     //     m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).push_back(q.front());
     //     q.pop();
     // }
+    sen++;
+    if(sen>100)sen=100;
+    if(m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).empty())
     m_packetParamsQueue.at(m_packetParamsQueue.size() - 1).push_back(params);
     
 }

@@ -152,7 +152,7 @@ class LteUeMac : public Object
     void DeoccupyChannel();
     void DecrementCounter(int N);
     void OccupyChannel();
-    void sendPdu(LteUePhySapProvider::TransmitSlPhySduParameters phyParams,LteMacSapProvider::TransmitPduParameters params );
+    void sendPdu(ns3::Ptr<ns3::Packet> p,LteUePhySapProvider::TransmitSlPhySduParameters phyParams);
     enum SlSchedulingGrantMetric
     {
         FIXED = 0,   // Default; Use values provided to UE MAC
@@ -604,8 +604,10 @@ class LteUeMac : public Object
     std::vector<uint8_t> m_miUlHarqProcessesPacketTimer; ///< timer for packet life in the buffer
 
     uint16_t m_rnti; ///< RNTI
-    bool channeloccupied = false;
     uint16_t m_imsi; ///< IMSI
+    bool channeloccupied = false;
+    bool inprocess = false;
+    uint16_t num = 0;
 
     bool m_rachConfigured;                                  ///< is RACH configured?
     LteUeCmacSapProvider::RachConfig m_rachConfig;          ///< RACH configuration

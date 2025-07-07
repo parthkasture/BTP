@@ -68,6 +68,8 @@ class LteRadioBearerTag : public Tag
      */
     LteRadioBearerTag(uint16_t rnti, uint8_t lcId, uint32_t srcL2Id, uint32_t dstL2Id);
 
+    // LteRadioBearerTag(uint16_t rnti, uint8_t lcId, uint32_t srcL2Id, uint32_t dstL2Id,uint16_t seqNo);
+
     /**
      * Set the RNTI to the given value.
      *
@@ -100,6 +102,8 @@ class LteRadioBearerTag : public Tag
      * \param dst The Sidelink destination layer 2 id
      */
     void SetDestinationL2Id(uint32_t dst);
+
+    // void SetSequenceNo(uint16_t seqNo);
 
     void Serialize(TagBuffer i) const override;
     void Deserialize(TagBuffer i) override;
@@ -137,12 +141,15 @@ class LteRadioBearerTag : public Tag
      */
     uint32_t GetDestinationL2Id() const;
 
+    // uint16_t GetSequenceNo() const;
+
   private:
     uint16_t m_rnti;    ///< RNTI
     uint8_t m_lcid;     ///< LCID
     uint8_t m_layer;    ///< layer
     uint32_t m_srcL2Id; ///< Source L2 ID (24 bits)
     uint32_t m_dstL2Id; ///< Destination L2 ID (24 bits)
+    // uint16_t seqNo;
 };
 
 } // namespace ns3
